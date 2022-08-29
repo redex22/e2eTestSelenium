@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report3.html</h1>
+    <p>Report generated on 28-Aug-2022 at 22:14:23 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19043-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "2.0.2"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.5</td></tr></table>
+    <h2>Summary</h2>
+    <p>1 tests ran in 18.82 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">0 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_e2e.py::TestEnd2End::test_e2e[loadhomepagedata0]</td>
+          <td class="col-duration">18.76</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="../test_e2e.py_TestEnd2End_test_e2e[loadhomepagedata0].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;myOwnFramework.test_e2e.TestEnd2End object at 0x0000018686CD15D0&gt;<br/>loadhomepagedata = {&#x27;email&#x27;: &#x27;hola@correo.com&#x27;, &#x27;firstname&#x27;: &#x27;Ricardo&#x27;, &#x27;gender&#x27;: &#x27;Male&#x27;, &#x27;password&#x27;: &#x27;1234&#x27;}<br/><br/>    def test_e2e(self, loadhomepagedata):<br/>        log = self.getlogger()<br/>        self.driver.implicitly_wait(5)<br/>        homePage = HomePage(self.driver)<br/>    <br/>        # find and send keys to the name, email and password parameters<br/>        log.debug(&quot;Sending name, email and password keys&quot;)<br/>        homePage.getname().send_keys(loadhomepagedata[&quot;firstname&quot;])<br/>        homePage.getemail().send_keys(loadhomepagedata[&quot;email&quot;])<br/>        homePage.getpassword().send_keys(loadhomepagedata[&quot;password&quot;])<br/>    <br/>        self.driver.execute_script(&quot;window.scrollTo(20,document.body.scrollHeight)&quot;)<br/>    <br/>        # check the box of I love Ice creams<br/>        log.debug(&quot;clicking on the ice cream box&quot;)<br/>        homePage.geticecreambox().click()<br/>    <br/>        # select female in the checkbox dropdown<br/>        log.debug(&quot;selecting gender&quot;)<br/>        self.selectbygender(homePage.getgenderbox(), loadhomepagedata[&quot;gender&quot;])<br/>    <br/>        # selecting the employed button<br/>        log.debug(&quot;clicking on the employed button&quot;)<br/>        homePage.getemployedbutton().click()<br/>    <br/>        # pressing submit<br/>        log.debug(&quot;clicking on submit&quot;)<br/>        homePage.getsubmit().click()<br/>    <br/>        # wrapping the alert<br/>        alert = homePage.getalert().text<br/>        log.info(f&quot;The alert message in HomePage is: {alert}&quot;)<br/>    <br/>        # gets back the page to the scroll top<br/>        self.driver.find_element(By.TAG_NAME, &quot;html&quot;).send_keys(Keys.HOME)<br/>    <br/>        # comparing the success alert to pass the test<br/>        assert &quot;Success!&quot; in alert<br/>    <br/>        # clicking on shop for a redirection to the shop page<br/>        log.info(&quot;Entering the Shop Page&quot;)<br/>        shopPage = homePage.getshoppage()<br/>    <br/>        # getting all the products boxes and wrapping them into a variable<br/>        cardBoxes = shopPage.getcardboxes()<br/>    <br/>        # iterating through all the cardBoxes until I find the desired one and I add it to the cart<br/>        for card in cardBoxes:<br/>            title = card.find_element(By.XPATH, &quot;div/h4/a&quot;).text<br/>            if title == &quot;Nokia Edge&quot;:<br/>                card.find_element(By.TAG_NAME, &quot;button&quot;).click()<br/>    <br/>        # clicking and going to the checkout cart<br/>        shopPage.getbuybutton().click()<br/>    <br/>        # clicking on checkout<br/>        log.info(&quot;Going to checkout&quot;)<br/>        shopPage.getcheckoutbutton().click()<br/>    <br/>        # sending keys into the delivery location box and expliciting wait to select U.S.A<br/>        log.debug(&quot;Sending the delivery location key&quot;)<br/>        shopPage.getlocationbox().send_keys(&quot;uni&quot;)<br/>        self.verifybylinktext(&quot;United States of America&quot;)<br/>        shopPage.getcountry().click()<br/>    <br/>        # check the terms and conditions checkbox and in purchase<br/>        shopPage.getconditioncheckbox().click()<br/>        shopPage.getpurchase().click()<br/>    <br/>        final_alert = shopPage.getfinalalert().text<br/>        log.info(f&quot;Final sucess alert is: {final_alert}&quot;)<br/>&gt;       assert &quot;Successs&quot; in final_alert<br/><span class="error">E       AssertionError: assert &#x27;Successs&#x27; in &#x27;×\nSuccess! Thank you! Your order will be delivered in next few weeks :-).&#x27;</span><br/><br/>test_e2e.py:88: AssertionError<br/> -------------------------------Captured log call-------------------------------- <br/>DEBUG    test_e2e:test_e2e.py:23 Sending name, email and password keys
+DEBUG    test_e2e:test_e2e.py:31 clicking on the ice cream box
+DEBUG    test_e2e:test_e2e.py:35 selecting gender
+DEBUG    test_e2e:test_e2e.py:39 clicking on the employed button
+DEBUG    test_e2e:test_e2e.py:43 clicking on submit
+INFO     test_e2e:test_e2e.py:48 The alert message in HomePage is: ×
+Success! The Form has been submitted successfully!.
+INFO     test_e2e:test_e2e.py:57 Entering the Shop Page
+INFO     test_e2e:test_e2e.py:73 Going to checkout
+DEBUG    test_e2e:test_e2e.py:77 Sending the delivery location key
+INFO     test_e2e:test_e2e.py:87 Final sucess alert is: ×
+Success! Thank you! Your order will be delivered in next few weeks :-).<br/></div></td></tr></tbody></table></body></html>
